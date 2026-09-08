@@ -54,7 +54,7 @@ on:
     secrets:
       SNYK_API_CLIENT_ID:
         required: true
-      SNYK_API_CLIENT_SECRET:
+      SNYK_CLIENT_SECRET:
         required: true
 
 jobs:
@@ -77,10 +77,10 @@ jobs:
       - run: npm install --no-audit --no-fund
       - uses: snyk/actions/setup@master
       - name: Snyk auth (service account, OAuth2)
-        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_API_CLIENT_SECRET"
+        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_CLIENT_SECRET"
         env:
           SNYK_API_CLIENT_ID: ${{ secrets.SNYK_API_CLIENT_ID }}
-          SNYK_API_CLIENT_SECRET: ${{ secrets.SNYK_API_CLIENT_SECRET }}
+          SNYK_CLIENT_SECRET: ${{ secrets.SNYK_CLIENT_SECRET }}
       - name: Snyk Open Source test
         run: snyk test --severity-threshold=${{ inputs.severity_threshold }}
 
@@ -94,10 +94,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: snyk/actions/setup@master
       - name: Snyk auth (service account, OAuth2)
-        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_API_CLIENT_SECRET"
+        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_CLIENT_SECRET"
         env:
           SNYK_API_CLIENT_ID: ${{ secrets.SNYK_API_CLIENT_ID }}
-          SNYK_API_CLIENT_SECRET: ${{ secrets.SNYK_API_CLIENT_SECRET }}
+          SNYK_CLIENT_SECRET: ${{ secrets.SNYK_CLIENT_SECRET }}
       - name: Snyk Code test
         run: snyk code test
 
@@ -111,10 +111,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: snyk/actions/setup@master
       - name: Snyk auth (service account, OAuth2)
-        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_API_CLIENT_SECRET"
+        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_CLIENT_SECRET"
         env:
           SNYK_API_CLIENT_ID: ${{ secrets.SNYK_API_CLIENT_ID }}
-          SNYK_API_CLIENT_SECRET: ${{ secrets.SNYK_API_CLIENT_SECRET }}
+          SNYK_CLIENT_SECRET: ${{ secrets.SNYK_CLIENT_SECRET }}
       - name: Snyk IaC test
         run: snyk iac test --severity-threshold=${{ inputs.severity_threshold }}
 
@@ -125,10 +125,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: snyk/actions/setup@master
       - name: Snyk auth (service account, OAuth2)
-        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_API_CLIENT_SECRET"
+        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_CLIENT_SECRET"
         env:
           SNYK_API_CLIENT_ID: ${{ secrets.SNYK_API_CLIENT_ID }}
-          SNYK_API_CLIENT_SECRET: ${{ secrets.SNYK_API_CLIENT_SECRET }}
+          SNYK_CLIENT_SECRET: ${{ secrets.SNYK_CLIENT_SECRET }}
       - name: Build image
         run: docker build -t "scan-target:${{ github.sha }}" -f "${{ inputs.dockerfile_path }}" .
       - name: Snyk Container test
@@ -158,9 +158,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: snyk/actions/setup@master
       - name: Snyk auth (service account, OAuth2)
-        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_API_CLIENT_SECRET"
+        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_CLIENT_SECRET"
         env:
           SNYK_API_CLIENT_ID: ${{ secrets.SNYK_API_CLIENT_ID }}
-          SNYK_API_CLIENT_SECRET: ${{ secrets.SNYK_API_CLIENT_SECRET }}
+          SNYK_CLIENT_SECRET: ${{ secrets.SNYK_CLIENT_SECRET }}
       - name: Snyk Secrets test
         run: snyk secrets test --severity-threshold=${{ inputs.severity_threshold }}
