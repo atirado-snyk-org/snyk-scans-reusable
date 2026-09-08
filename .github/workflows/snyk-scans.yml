@@ -1,0 +1,135 @@
+name: Snyk scans (reusable)
+
+# Reusable workflow_call version of the jobs validated in Finding 9/10 of the
+# PR-check investigation. Scanning logic is unchanged from that validation —
+# only relocated here and parameterized so a caller can pick which of the
+# five Snyk products to run and where to run them from.
+on:
+  workflow_call:
+    inputs:
+      run_open_source:
+        description: "Run Snyk Open Source (snyk test)"
+        type: boolean
+        default: true
+      run_code:
+        description: "Run Snyk Code (snyk code test)"
+        type: boolean
+        default: true
+      run_iac:
+        description: "Run Snyk IaC (snyk/actions/iac)"
+        type: boolean
+        default: true
+      run_container:
+        description: "Run Snyk Container (snyk/actions/docker)"
+        type: boolean
+        default: true
+      run_secrets:
+        description: "Run Snyk Secrets standalone (see README caveat: additive to, not a replacement for, the native SCM integration check, which already works reliably)"
+        type: boolean
+        default: false
+      working_directory:
+        description: "Directory to run Open Source / Code scans from, relative to repo root"
+        type: string
+        default: "."
+      severity_threshold:
+        description: "Minimum severity that fails Open Source / Container jobs (low|medium|high|critical)"
+        type: string
+        default: "medium"
+      dockerfile_path:
+        description: "Path to the Dockerfile for the Container job, relative to repo root"
+        type: string
+        default: "Dockerfile"
+    secrets:
+      SNYK_TOKEN:
+        required: true
+
+jobs:
+  snyk-open-source:
+    if: inputs.run_open_source
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # --no-audit --no-fund is required, not optional: plain `npm install` on
+      # GitHub-hosted runners can silently run npm's own registry-advisory
+      # lookup for 6+ minutes on some dependency sets (see Finding 9's rough
+      # edge). Drop this flag only if you've confirmed your own manifests
+      # don't hit that path.
+      - run: npm install --no-audit --no-fund
+      - uses: snyk/actions/setup@master
+      - name: Snyk Open Source test
+        run: snyk test --severity-threshold=${{ inputs.severity_threshold }}
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  snyk-code:
+    if: inputs.run_code
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: snyk/actions/setup@master
+      - name: Snyk Code test
+        run: snyk code test
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  snyk-iac:
+    if: inputs.run_iac
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snyk IaC test
+        uses: snyk/actions/iac@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  snyk-container:
+    if: inputs.run_container
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t "scan-target:${{ github.sha }}" -f "${{ inputs.dockerfile_path }}" .
+      - name: Snyk Container test
+        uses: snyk/actions/docker@master
+        with:
+          image: "scan-target:${{ github.sha }}"
+          args: --file=${{ inputs.dockerfile_path }} --severity-threshold=${{ inputs.severity_threshold }}
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  # Additive, not a replacement: Snyk Secrets already works reliably via the
+  # native SCM integration (Finding 1/3/7/10) — this is offered so a customer
+  # who wants ONE uniform mechanism across all five products, with no
+  # dependency on Snyk's server-side import/status behavior at all, can pick
+  # that instead. Default is `false`, unlike the other four, precisely so it
+  # stays opt-in rather than implying Secrets needed fixing too.
+  #
+  # No dedicated `snyk/actions/secrets` variant exists in snyk/actions as of
+  # this writing (confirmed against the actions repo directly) — this uses
+  # the CLI's own `snyk secrets test` command instead. Requires the Secrets
+  # feature to be enabled as an entitlement on your Snyk org (separate from
+  # the other four); a missing entitlement fails with SNYK-CLI-0016, which
+  # this job does NOT try to distinguish from a real finding — check job logs
+  # if this fails and you don't expect it to.
+  snyk-secrets:
+    if: inputs.run_secrets
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: snyk/actions/setup@master
+      - name: Snyk Secrets test
+        run: snyk secrets test --severity-threshold=${{ inputs.severity_threshold }}
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
