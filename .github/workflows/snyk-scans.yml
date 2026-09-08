@@ -4,6 +4,18 @@ name: Snyk scans (reusable)
 # PR-check investigation. Scanning logic is unchanged from that validation —
 # only relocated here and parameterized so a caller can pick which of the
 # five Snyk products to run and where to run them from.
+#
+# Auth note (Finding 11): uses a Snyk Service Account's OAuth2 client
+# credentials (`snyk auth --auth-type=oauth`), not a static SNYK_TOKEN. This
+# is why every job runs `snyk/actions/iac`/`snyk/actions/docker` replaced with
+# direct CLI calls (`snyk iac test` / `snyk container test`) instead of the
+# marketplace wrapper actions used in Finding 9/10 — those wrappers run the
+# CLI inside their own pre-pulled Docker image (confirmed via job logs: "Pull
+# snyk/snyk:alpine" / "Pull snyk/snyk:docker"), a separate container from the
+# runner a prior `snyk auth` step would have authenticated, and no OAuth
+# client-credential support is confirmed for them. Direct CLI calls on the
+# host runner let one `snyk auth` step authenticate every subsequent step in
+# that job.
 on:
   workflow_call:
     inputs:
@@ -16,11 +28,11 @@ on:
         type: boolean
         default: true
       run_iac:
-        description: "Run Snyk IaC (snyk/actions/iac)"
+        description: "Run Snyk IaC (snyk iac test)"
         type: boolean
         default: true
       run_container:
-        description: "Run Snyk Container (snyk/actions/docker)"
+        description: "Run Snyk Container (snyk container test)"
         type: boolean
         default: true
       run_secrets:
@@ -28,11 +40,11 @@ on:
         type: boolean
         default: false
       working_directory:
-        description: "Directory to run Open Source / Code scans from, relative to repo root"
+        description: "Directory to run Open Source / Code / IaC scans from, relative to repo root"
         type: string
         default: "."
       severity_threshold:
-        description: "Minimum severity that fails Open Source / Container jobs (low|medium|high|critical)"
+        description: "Minimum severity that fails Open Source / IaC / Container jobs (low|medium|high|critical)"
         type: string
         default: "medium"
       dockerfile_path:
@@ -40,7 +52,9 @@ on:
         type: string
         default: "Dockerfile"
     secrets:
-      SNYK_TOKEN:
+      SNYK_API_CLIENT_ID:
+        required: true
+      SNYK_API_CLIENT_SECRET:
         required: true
 
 jobs:
@@ -62,10 +76,13 @@ jobs:
       # don't hit that path.
       - run: npm install --no-audit --no-fund
       - uses: snyk/actions/setup@master
+      - name: Snyk auth (service account, OAuth2)
+        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_API_CLIENT_SECRET"
+        env:
+          SNYK_API_CLIENT_ID: ${{ secrets.SNYK_API_CLIENT_ID }}
+          SNYK_API_CLIENT_SECRET: ${{ secrets.SNYK_API_CLIENT_SECRET }}
       - name: Snyk Open Source test
         run: snyk test --severity-threshold=${{ inputs.severity_threshold }}
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   snyk-code:
     if: inputs.run_code
@@ -76,35 +93,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: snyk/actions/setup@master
+      - name: Snyk auth (service account, OAuth2)
+        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_API_CLIENT_SECRET"
+        env:
+          SNYK_API_CLIENT_ID: ${{ secrets.SNYK_API_CLIENT_ID }}
+          SNYK_API_CLIENT_SECRET: ${{ secrets.SNYK_API_CLIENT_SECRET }}
       - name: Snyk Code test
         run: snyk code test
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   snyk-iac:
     if: inputs.run_iac
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
     steps:
       - uses: actions/checkout@v4
-      - name: Snyk IaC test
-        uses: snyk/actions/iac@master
+      - uses: snyk/actions/setup@master
+      - name: Snyk auth (service account, OAuth2)
+        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_API_CLIENT_SECRET"
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_API_CLIENT_ID: ${{ secrets.SNYK_API_CLIENT_ID }}
+          SNYK_API_CLIENT_SECRET: ${{ secrets.SNYK_API_CLIENT_SECRET }}
+      - name: Snyk IaC test
+        run: snyk iac test --severity-threshold=${{ inputs.severity_threshold }}
 
   snyk-container:
     if: inputs.run_container
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: snyk/actions/setup@master
+      - name: Snyk auth (service account, OAuth2)
+        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_API_CLIENT_SECRET"
+        env:
+          SNYK_API_CLIENT_ID: ${{ secrets.SNYK_API_CLIENT_ID }}
+          SNYK_API_CLIENT_SECRET: ${{ secrets.SNYK_API_CLIENT_SECRET }}
       - name: Build image
         run: docker build -t "scan-target:${{ github.sha }}" -f "${{ inputs.dockerfile_path }}" .
       - name: Snyk Container test
-        uses: snyk/actions/docker@master
-        with:
-          image: "scan-target:${{ github.sha }}"
-          args: --file=${{ inputs.dockerfile_path }} --severity-threshold=${{ inputs.severity_threshold }}
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk container test "scan-target:${{ github.sha }}" --file=${{ inputs.dockerfile_path }} --severity-threshold=${{ inputs.severity_threshold }}
 
   # Additive, not a replacement: Snyk Secrets already works reliably via the
   # native SCM integration (Finding 1/3/7/10) — this is offered so a customer
@@ -129,7 +157,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: snyk/actions/setup@master
+      - name: Snyk auth (service account, OAuth2)
+        run: snyk auth --auth-type=oauth --client-id="$SNYK_API_CLIENT_ID" --client-secret="$SNYK_API_CLIENT_SECRET"
+        env:
+          SNYK_API_CLIENT_ID: ${{ secrets.SNYK_API_CLIENT_ID }}
+          SNYK_API_CLIENT_SECRET: ${{ secrets.SNYK_API_CLIENT_SECRET }}
       - name: Snyk Secrets test
         run: snyk secrets test --severity-threshold=${{ inputs.severity_threshold }}
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
