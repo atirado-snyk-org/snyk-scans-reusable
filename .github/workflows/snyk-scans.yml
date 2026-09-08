@@ -109,7 +109,7 @@ jobs:
       - name: Snyk Open Source test
         run: snyk test --all-projects --severity-threshold=${{ inputs.severity_threshold }}
       - name: Snyk Open Source monitor (dashboard visibility)
-        if: inputs.report_to_ui
+        if: always() && inputs.report_to_ui
         run: snyk monitor --all-projects --project-name=${{ github.repository }}
 
   snyk-code:
@@ -131,7 +131,7 @@ jobs:
       # --project-name is not optional here — confirmed empirically:
       # `snyk code test --report` alone fails with a generic SNYK-CLI-0000.
       - name: Snyk Code report (dashboard visibility)
-        if: inputs.report_to_ui
+        if: always() && inputs.report_to_ui
         run: snyk code test --report --project-name=${{ github.repository }}
 
   snyk-iac:
@@ -151,7 +151,7 @@ jobs:
       - name: Snyk IaC test
         run: snyk iac test --severity-threshold=${{ inputs.severity_threshold }}
       - name: Snyk IaC report (dashboard visibility)
-        if: inputs.report_to_ui
+        if: always() && inputs.report_to_ui
         run: snyk iac test --report
 
   snyk-container:
@@ -170,7 +170,7 @@ jobs:
       - name: Snyk Container test
         run: snyk container test "scan-target:${{ github.sha }}" --file=${{ inputs.dockerfile_path }} --severity-threshold=${{ inputs.severity_threshold }}
       - name: Snyk Container monitor (dashboard visibility)
-        if: inputs.report_to_ui
+        if: always() && inputs.report_to_ui
         run: snyk container monitor "scan-target:${{ github.sha }}" --file=${{ inputs.dockerfile_path }} --project-name=${{ github.repository }}
 
   # Additive, not a replacement: Snyk Secrets already works reliably via the
@@ -204,5 +204,5 @@ jobs:
       - name: Snyk Secrets test
         run: snyk secrets test --severity-threshold=${{ inputs.severity_threshold }}
       - name: Snyk Secrets report (dashboard visibility)
-        if: inputs.report_to_ui
+        if: always() && inputs.report_to_ui
         run: snyk secrets test --report
